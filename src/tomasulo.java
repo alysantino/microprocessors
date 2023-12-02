@@ -150,6 +150,8 @@ public class tomasulo {
                         int resultIndex = Integer.parseInt(inst.i.substring(1));
                         if (registerFile.registers[firstOperandIndex].busy == false
                                 && registerFile.registers[secondOperandIndex].busy == false) {
+
+                                    //todo: check the register file for the value of the operands and if it is bust i will put the tag of the reservation station in the Qi and Qj
                             addBuffers[i].opcode = type;
                             addBuffers[i].Qi = null;
                             addBuffers[i].Qj = null;
