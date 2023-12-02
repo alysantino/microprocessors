@@ -2,7 +2,7 @@
 public class loadBuffer {
     public int address;
     public boolean busy;
-    public int tag;
+    public String tag;
 
     public loadBuffer(int address) {
         this.address = address;
@@ -23,9 +23,7 @@ public class loadBuffer {
         return busy;
     }
 
-    public int getTag() {
-        return tag;
-    }
+
 
     public void setAddress(int address) {
         this.address = address;
@@ -35,8 +33,19 @@ public class loadBuffer {
         this.busy = busy;
     }
 
-    public void setTag(int tag) {
-        this.tag = tag;
+
+    public boolean isempty() {
+        if (this.busy == false) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public loadBuffer() {
+        this.address = 0;
+        this.busy = false;
+        this.tag = null;
     }
 
 

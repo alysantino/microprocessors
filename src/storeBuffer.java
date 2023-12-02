@@ -2,10 +2,10 @@ public class storeBuffer {
     public int address;
     public int V;
     public boolean busy;
-    public int tag;
+    public String tag;
     public String Q;
 
-    public storeBuffer(int address, int V, boolean busy, int tag, String Q) {
+    public storeBuffer(int address, int V, boolean busy, String tag, String Q) {
         this.address = address;
         this.V = V;
         this.busy = busy;
@@ -17,7 +17,7 @@ public class storeBuffer {
         this.address = 0;
         this.V = 0;
         this.busy = false;
-        this.tag = 0;
+        this.tag = null;
         this.Q = null;
     }
 
@@ -33,9 +33,7 @@ public class storeBuffer {
         return busy;
     }
 
-    public int getTag() {
-        return tag;
-    }
+
 
     public String getQ() {
         return Q;
@@ -53,9 +51,7 @@ public class storeBuffer {
         this.busy = busy;
     }
 
-    public void setTag(int tag) {
-        this.tag = tag;
-    }
+
 
     public void setQ(String Q) {
         this.Q = Q;
@@ -70,6 +66,22 @@ public class storeBuffer {
                 ", tag=" + tag +
                 ", Q='" + Q + '\'' +
                 '}';
+    }
+
+    public boolean isempty() {
+        if (this.busy == false) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public storeBuffer() {
+        this.address = 0;
+        this.V = 0;
+        this.busy = false;
+        this.tag = null;
+        this.Q = null;
     }
 
 }

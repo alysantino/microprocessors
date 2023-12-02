@@ -2,10 +2,12 @@ public class registerFile {
     public static class register {
         public String name;
         public String Qi;
+        public boolean busy;
 
         public register(int number) {
             name = "F" + number;
             Qi = "0";
+            busy = false;
         }
 
         @Override

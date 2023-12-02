@@ -28,5 +28,17 @@ public class instruction {
         this.value = value;
 
     }
+    //toString method for debugging
+    @Override
+    public String toString() {
+        //print appriopriate instruction based on type
+        if (type.equals("L.D") || type.equals("S.D")) {
+            return type + " " + i + " " + value;
+        } else if (type.equals("ADDI") || type.equals("SUBI")) {
+            return type + " " + i + " " + j + " " + value;
+        } else {
+            return type + " " + i + " " + j + " " + k;
+        }
+    }
 
 }
