@@ -6,6 +6,7 @@ public class reservationStation {
     public String Qj;
     public String tag;
     public boolean busy;
+    public int time;
 
     public reservationStation(String opcode, int Vi, int Vj, String Qi, String Qj, String tag, boolean busy) {
         this.opcode = opcode;

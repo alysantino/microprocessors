@@ -7,6 +7,7 @@ public class instruction {
     public int executionComplete;
     public int writeResult;
     public int value;
+    public int tag;
 
     public instruction(String type, String i, String j, String k) {
         this.type = type;

@@ -3,6 +3,7 @@ public class loadBuffer {
     public int address;
     public boolean busy;
     public String tag;
+    public int time;
 
     public loadBuffer(int address) {
         this.address = address;

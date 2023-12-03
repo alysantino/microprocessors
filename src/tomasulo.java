@@ -7,6 +7,11 @@ import java.util.Scanner;
 public class tomasulo {
     // arraylist of instructions to add instrucyions read from file
     public ArrayList<instruction> program = new ArrayList<instruction>();
+    ArrayList<instruction> issued = new ArrayList<instruction>();
+    ArrayList<instruction> toBeExecuted = new ArrayList<instruction>();
+    ArrayList<instruction> executed = new ArrayList<instruction>();
+    ArrayList<instruction> toBeWritten = new ArrayList<instruction>();
+
     int cycle = 0;
     int addLatency = 5;
     int subLatency = 5;
@@ -23,9 +28,8 @@ public class tomasulo {
     loadBuffer[] loadBuffers;
     storeBuffer[] storeBuffers;
     registerFile registerFile = new registerFile();
-    int ADDI = 1;
-    int SUBI = 1;
-    int BNEZ = 1;
+    int ADDILatency = 1;
+    int BNEZLatency = 1;
     int cycleCount = 0;
 
     public void readInstructions() {
@@ -131,6 +135,9 @@ public class tomasulo {
         System.out.println("Number of SD reservation stations: " + numStoreBuffers);
     }
 
+    // Your simulator should include ALU ops (FP adds, subs, multiply,
+    // divide), (integer ADDI or SUBI needed for loops), loads and stores
+    // and branches (BNEZ is enough).
     public void issue() {
         if (program.size() == 0) {
             return;
@@ -148,21 +155,28 @@ public class tomasulo {
                         int firstOperandIndex = Integer.parseInt(firstOperand.substring(1));
                         int secondOperandIndex = Integer.parseInt(secondOperand.substring(1));
                         int resultIndex = Integer.parseInt(inst.i.substring(1));
-                        if (registerFile.registers[firstOperandIndex].busy == false
-                                && registerFile.registers[secondOperandIndex].busy == false) {
-
-                                    //todo: check the register file for the value of the operands and if it is bust i will put the tag of the reservation station in the Qi and Qj
-                            addBuffers[i].opcode = type;
+                        if (registerFile.registers[firstOperandIndex].busy == false) {
                             addBuffers[i].Qi = null;
-                            addBuffers[i].Qj = null;
-                            addBuffers[i].busy = true;
                             addBuffers[i].Vi = Integer.parseInt(registerFile.registers[firstOperandIndex].Qi);
-                            addBuffers[i].Vj = Integer.parseInt(registerFile.registers[secondOperandIndex].Qi);
-                            registerFile.registers[resultIndex].Qi = addBuffers[i].tag;
-                            registerFile.registers[resultIndex].busy = true;
-                            inst.issue = cycle;
-                            return;
+                        } else {
+                            addBuffers[i].Qi = registerFile.registers[firstOperandIndex].Qi;
+                            addBuffers[i].Vi = 0;
                         }
+                        if (registerFile.registers[secondOperandIndex].busy == false) {
+                            addBuffers[i].Qj = null;
+                            addBuffers[i].Vj = Integer.parseInt(registerFile.registers[secondOperandIndex].Qi);
+                        } else {
+                            addBuffers[i].Qj = registerFile.registers[secondOperandIndex].Qi;
+                            addBuffers[i].Vj = 0;
+                        }
+                        addBuffers[i].opcode = type;
+                        addBuffers[i].busy = true;
+                        // make conditional statment for type if DADD make the addbuffer[i].time =
+                        // addlatnecy if SUBI make the addbuffer[i].time = sublatency
+                        addBuffers[i].time = type.equals("DADD") ? addLatency : subLatency;
+                        registerFile.registers[resultIndex].Qi = addBuffers[i].tag;
+                        registerFile.registers[resultIndex].busy = true;
+                        inst.issue = cycle;
                     } else {
                         // ADDI or SUBI
                         String firstOperand = inst.j;
@@ -170,23 +184,115 @@ public class tomasulo {
                         int resultIndex = Integer.parseInt(inst.i.substring(1));
                         int value = Integer.parseInt(inst.k);
                         if (registerFile.registers[firstOperandIndex].busy == false) {
-                            addBuffers[i].opcode = type;
                             addBuffers[i].Qi = null;
-                            addBuffers[i].Qj = null;
-                            addBuffers[i].busy = true;
                             addBuffers[i].Vi = Integer.parseInt(registerFile.registers[firstOperandIndex].Qi);
-                            addBuffers[i].Vj = value;
-                            registerFile.registers[resultIndex].Qi = addBuffers[i].tag;
-                            inst.issue = cycle;
-                            registerFile.registers[resultIndex].busy = true;
-
-                            return;
+                        } else {
+                            addBuffers[i].Qi = registerFile.registers[firstOperandIndex].Qi;
+                            addBuffers[i].Vi = 0;
                         }
+                        addBuffers[i].opcode = type;
+                        addBuffers[i].Qj = null;
+                        addBuffers[i].Vj = value;
+                        registerFile.registers[resultIndex].Qi = addBuffers[i].tag;
+                        addBuffers[i].busy = true;
+                        addBuffers[i].time = ADDILatency;
+                        registerFile.registers[resultIndex].busy = true;
+                        inst.issue = cycle;
                     }
+                } else {
+                    System.out.println("add buffer is full");
+                    return;
                 }
-                program.remove(0);
             }
         }
+        if (type.equals("MUL.D") || type.equals("DIV.D")) {
+            for (int i = 0; i < nummulBuffers; i++) {
+                if (mulBuffers[i].isempty()) {
+                    String firstOperand = inst.j;
+                    String secondOperand = inst.k;
+                    int firstOperandIndex = Integer.parseInt(firstOperand.substring(1));
+                    int secondOperandIndex = Integer.parseInt(secondOperand.substring(1));
+                    int resultIndex = Integer.parseInt(inst.i.substring(1));
+                    if (registerFile.registers[firstOperandIndex].busy == false) {
+                        mulBuffers[i].Qi = null;
+                        mulBuffers[i].Vi = Integer.parseInt(registerFile.registers[firstOperandIndex].Qi);
+                    } else {
+                        mulBuffers[i].Qi = registerFile.registers[firstOperandIndex].Qi;
+                        mulBuffers[i].Vi = 0;
+                    }
+                    if (registerFile.registers[secondOperandIndex].busy == false) {
+                        mulBuffers[i].Qj = null;
+                        mulBuffers[i].Vj = Integer.parseInt(registerFile.registers[secondOperandIndex].Qi);
+                    } else {
+                        mulBuffers[i].Qj = registerFile.registers[secondOperandIndex].Qi;
+                        mulBuffers[i].Vj = 0;
+                    }
+                    mulBuffers[i].opcode = type;
+                    mulBuffers[i].busy = true;
+                    registerFile.registers[resultIndex].Qi = mulBuffers[i].tag;
+                    registerFile.registers[resultIndex].busy = true;
+                    mulBuffers[i].time = type.equals("MUL.D") ? mulLatency : divLatency;
+                    inst.issue = cycle;
+                } else {
+                    System.out.println("mul buffer is full");
+                    return;
+                }
+            }
+        }
+        if (type.equals("L.D")) {
+            for (int i = 0; i < numLoadBuffers; i++) {
+                if (loadBuffers[i].isempty()) {
+                    String firstOperand = inst.i;
+                    int address = inst.value;
+                    loadBuffers[i].address = address;
+                    loadBuffers[i].busy = true;
+                    loadBuffers[i].time = ldLatency;
+                    registerFile.registers[Integer.parseInt(firstOperand.substring(1))].Qi = loadBuffers[i].tag;
+                    registerFile.registers[Integer.parseInt(firstOperand.substring(1))].busy = true;
+                    inst.issue = cycle;
+                } else {
+                    System.out.println("load buffer is full");
+                    return;
+                }
+            }
+        }
+        if (type.equals("S.D")) {
+            for (int i = 0; i < numStoreBuffers; i++) {
+                if (storeBuffers[i].isempty()) {
+                    String firstOperand = inst.i;
+                    int address = inst.value;
+                    storeBuffers[i].address = address;
+                    storeBuffers[i].busy = true;
+                    storeBuffers[i].time = sdLatency;
+                    if (registerFile.registers[Integer.parseInt(firstOperand.substring(1))].busy == true) {
+                        storeBuffers[i].Q = registerFile.registers[Integer.parseInt(firstOperand.substring(1))].Qi;
+                    } else {
+                        storeBuffers[i].V = Integer
+                                .parseInt(registerFile.registers[Integer.parseInt(firstOperand.substring(1))].Qi);
+                    }
+                    inst.issue = cycle;
+                } else {
+                    System.out.println("store buffer is full");
+                    return;
+                }
+            }
+        }
+        // todo: BNEZ
+        program.remove(0);
+        issued.add(inst);
+    }
 
+    public void execute() {
+        for (reservationStation buffer : addBuffers) {
+            // check if the inst is yet to be executed then i will just remove it from the
+            // array as it just been issued if it is executing i will just decrement the add
+            // buffer holding this inst time if the time became 0 i will remove it from the
+            // array and add it to the to be written array and publish its result to the
+            // register file and the bus if it is not executing i will know it by checking
+            // on the qi and qk if not null this means that the instruction is waiting for
+            // another instruction to publish its result so then i will just leave the
+            // latency as it is and also remove it from tobe executed array
+
+        }
     }
 }

@@ -4,6 +4,8 @@ public class storeBuffer {
     public boolean busy;
     public String tag;
     public String Q;
+    public int time;
+
 
     public storeBuffer(int address, int V, boolean busy, String tag, String Q) {
         this.address = address;
