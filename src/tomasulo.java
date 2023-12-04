@@ -27,6 +27,7 @@ public class tomasulo {
     reservationStation[] mulBuffers;
     loadBuffer[] loadBuffers;
     storeBuffer[] storeBuffers;
+    cache cache;
     registerFile registerFile = new registerFile();
     int ADDILatency = 1;
     int BNEZLatency = 1;
@@ -120,6 +121,7 @@ public class tomasulo {
             storeBuffers[i] = new storeBuffer();
             storeBuffers[i].tag = "S" + i + 1;
         }
+        cache = new cache(100);
     }
 
     public void printTomasuloDetails() {
@@ -177,6 +179,7 @@ public class tomasulo {
                         registerFile.registers[resultIndex].Qi = addBuffers[i].tag;
                         registerFile.registers[resultIndex].busy = true;
                         inst.issue = cycle;
+                        inst.tag = addBuffers[i].tag;
                     } else {
                         // ADDI or SUBI
                         String firstOperand = inst.j;
@@ -198,6 +201,7 @@ public class tomasulo {
                         addBuffers[i].time = ADDILatency;
                         registerFile.registers[resultIndex].busy = true;
                         inst.issue = cycle;
+                        inst.tag = addBuffers[i].tag;
                     }
                 } else {
                     System.out.println("add buffer is full");
@@ -233,6 +237,7 @@ public class tomasulo {
                     registerFile.registers[resultIndex].busy = true;
                     mulBuffers[i].time = type.equals("MUL.D") ? mulLatency : divLatency;
                     inst.issue = cycle;
+                    inst.tag = mulBuffers[i].tag;
                 } else {
                     System.out.println("mul buffer is full");
                     return;
@@ -250,6 +255,7 @@ public class tomasulo {
                     registerFile.registers[Integer.parseInt(firstOperand.substring(1))].Qi = loadBuffers[i].tag;
                     registerFile.registers[Integer.parseInt(firstOperand.substring(1))].busy = true;
                     inst.issue = cycle;
+                    inst.tag = loadBuffers[i].tag;
                 } else {
                     System.out.println("load buffer is full");
                     return;
@@ -271,6 +277,7 @@ public class tomasulo {
                                 .parseInt(registerFile.registers[Integer.parseInt(firstOperand.substring(1))].Qi);
                     }
                     inst.issue = cycle;
+                    inst.tag = storeBuffers[i].tag;
                 } else {
                     System.out.println("store buffer is full");
                     return;
@@ -284,15 +291,119 @@ public class tomasulo {
 
     public void execute() {
         for (reservationStation buffer : addBuffers) {
-            // check if the inst is yet to be executed then i will just remove it from the
-            // array as it just been issued if it is executing i will just decrement the add
-            // buffer holding this inst time if the time became 0 i will remove it from the
-            // array and add it to the to be written array and publish its result to the
-            // register file and the bus if it is not executing i will know it by checking
-            // on the qi and qk if not null this means that the instruction is waiting for
-            // another instruction to publish its result so then i will just leave the
-            // latency as it is and also remove it from tobe executed array
+            if (buffer.busy == true) {
+                if (buffer.time == 1) {
+                    // get the instruction from the executed array
+                    for (instruction instruction : executed) {
+                        if (instruction.tag.equals(buffer.tag)) {
+                            instruction.executionComplete = cycle;
+                            logicExecute(buffer, instruction);
+                            buffer.time--;
+                        }
+                    }
+                    buffer.busy = false;
+                    buffer.deleteStation();
+                } else {
+                    if (buffer.Qi == null && buffer.Qj == null) {
+                        buffer.time--;
+                    }
+                }
+            }
+        }
+        for (reservationStation buffer : mulBuffers) {
+            if (buffer.busy == true) {
+                if (buffer.time == 1) {
+                    // get the instruction from the executed array
+                    for (instruction instruction : executed) {
+                        if (instruction.tag.equals(buffer.tag)) {
+                            instruction.executionComplete = cycle;
+                            logicExecute(buffer, instruction);
+                            buffer.time--;
+                        }
+                    }
+                    buffer.busy = false;
+                    buffer.deleteStation();
+                } else {
+                    if (buffer.Qi == null && buffer.Qj == null) {
+                        buffer.time--;
+                    }
+                }
+            }
+        }
+        for (loadBuffer buffer : loadBuffers) {
+            if (buffer.busy == true) {
+                if (buffer.time == 1) {
+                    // get the instruction from the executed array
+                    for (instruction instruction : executed) {
+                        if (instruction.tag.equals(buffer.tag)) {
+                            instruction.executionComplete = cycle;
+                            instruction.writeResult = cycle+1;
+                            instruction.value = cache.read(buffer.address);
+                            buffer.time--;
+                        }
+                    }
+                    buffer.busy = false;
+                    buffer.deleteBuffer();
+                } else {
+                    buffer.time--;
+                }
+            }
+        }
 
+        for (storeBuffer buffer : storeBuffers) {
+            if (buffer.busy == true) {
+                if (buffer.time == 1) {
+                    // get the instruction from the executed array
+                    for (instruction instruction : executed) {
+                        if (instruction.tag.equals(buffer.tag)) {
+                            instruction.executionComplete = cycle;
+                            instruction.writeResult = cycle+1;
+                            cache.write(buffer.address, buffer.V);
+                            buffer.time--;
+                        }
+                    }
+                    buffer.busy = false;
+                    buffer.deleteBuffer();
+                } else {
+                    buffer.time--;
+                }
+            }
         }
     }
+
+    public void writeBack() {
+        // loop on all buffers if the time is 0 then i will remove it from the array and
+        // add it to the to be written array and publish its result to the register file
+        // and the bus
+    }
+
+    private void logicExecute(reservationStation s, instruction inst) {
+        // reservationStation is respsnisble for executing the instruction ADD.D or
+        // SUB.D or ADDI or SUBI or DADD or DSUB or DADDI or DSUBI or DIV.D or MUL.D
+        // so i need to check on the opcode and then i will know what to do on the vi
+        // and vj and the time
+        if (s.opcode.equals("ADD.D")) {
+            inst.value = s.Vi + s.Vj;
+        } else if (s.opcode.equals("SUB.D")) {
+            inst.value = s.Vi - s.Vj;
+        } else if (s.opcode.equals("ADDI")) {
+            inst.value = s.Vi + s.Vj;
+        } else if (s.opcode.equals("SUBI")) {
+            inst.value = s.Vi - s.Vj;
+        } else if (s.opcode.equals("DADD")) {
+            inst.value = s.Vi + s.Vj;
+        } else if (s.opcode.equals("DSUB")) {
+            inst.value = s.Vi - s.Vj;
+        } else if (s.opcode.equals("DADDI")) {
+            inst.value = s.Vi + s.Vj;
+        } else if (s.opcode.equals("DSUBI")) {
+            inst.value = s.Vi - s.Vj;
+        } else if (s.opcode.equals("DIV.D")) {
+            inst.value = s.Vi / s.Vj;
+        } else if (s.opcode.equals("MUL.D")) {
+            inst.value = s.Vi * s.Vj;
+        }
+
+    }
+    //in the running function i need to check on all instructions time and check with clock if it need to be executed or not
 }
