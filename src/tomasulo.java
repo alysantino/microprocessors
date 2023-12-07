@@ -4,16 +4,17 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Scanner;
 
+import javax.sound.midi.SysexMessage;
+
 public class tomasulo {
     // arraylist of instructions to add instrucyions read from file
     public ArrayList<instruction> program = new ArrayList<instruction>();
     ArrayList<instruction> issued = new ArrayList<instruction>();
-    ArrayList<instruction> toBeExecuted = new ArrayList<instruction>();
     ArrayList<instruction> executed = new ArrayList<instruction>();
     ArrayList<instruction> toBeWritten = new ArrayList<instruction>();
 
     int cycle = 0;
-    int addLatency = 5;
+    int addLatency = 1;
     int subLatency = 5;
     int mulLatency = 5;
     int divLatency = 5;
@@ -31,7 +32,6 @@ public class tomasulo {
     registerFile registerFile = new registerFile();
     int ADDILatency = 1;
     int BNEZLatency = 1;
-    int cycleCount = 0;
 
     public void readInstructions() {
         String fileName = "src\\instructions.txt";
@@ -125,16 +125,47 @@ public class tomasulo {
     }
 
     public void printTomasuloDetails() {
-        System.out.println("ADD Latency: " + addLatency);
-        System.out.println("SUB Latency: " + subLatency);
-        System.out.println("MUL Latency: " + mulLatency);
-        System.out.println("DIV Latency: " + divLatency);
-        System.out.println("LD Latency: " + ldLatency);
-        System.out.println("SD Latency: " + sdLatency);
-        System.out.println("Number of ADD reservation stations: " + numaddBuffers);
-        System.out.println("Number of MUL reservation stations: " + nummulBuffers);
-        System.out.println("Number of LD reservation stations: " + numLoadBuffers);
-        System.out.println("Number of SD reservation stations: " + numStoreBuffers);
+        // i need to print how these
+        // instructions are executed as well as the content of each reservation
+        // station/buffer, the register file, the cache
+        System.out.println("Instructions:");
+        for (instruction inst : program) {
+            System.out.println(inst);
+        }
+        System.out.println("Issued:");
+        for (instruction inst : issued) {
+            System.out.println(inst);
+        }
+
+        System.out.println("Executed:");
+        for (instruction inst : executed) {
+            System.out.println(inst);
+        }
+        System.out.println("To be written:");
+        for (instruction inst : toBeWritten) {
+            System.out.println(inst);
+        }
+        System.out.println("Add buffers:");
+        for (reservationStation buffer : addBuffers) {
+            System.out.println(buffer);
+        }
+        System.out.println("Mul buffers:");
+        for (reservationStation buffer : mulBuffers) {
+            System.out.println(buffer);
+        }
+        System.out.println("Load buffers:");
+        for (loadBuffer buffer : loadBuffers) {
+            System.out.println(buffer);
+        }
+        System.out.println("Store buffers:");
+        for (storeBuffer buffer : storeBuffers) {
+            System.out.println(buffer);
+        }
+        System.out.println("Register file:");
+        for (registerFile.register register : registerFile.registers) {
+            System.out.println(register);
+        }
+
     }
 
     // Your simulator should include ALU ops (FP adds, subs, multiply,
@@ -151,7 +182,8 @@ public class tomasulo {
                 || type.equals("DADDI") || type.equals("DSUBI")) {
             for (int i = 0; i < numaddBuffers; i++) {
                 if (addBuffers[i].isempty()) {
-                    if (!type.equals("DADDI") && !type.equals("DSUBI")) {
+                    if (!type.equals("ADDI") && !type.equals("SUBI") && !type.equals("DADDI")
+                            && !type.equals("DSUBI")) {
                         String firstOperand = inst.j;
                         String secondOperand = inst.k;
                         int firstOperandIndex = Integer.parseInt(firstOperand.substring(1));
@@ -173,19 +205,19 @@ public class tomasulo {
                         }
                         addBuffers[i].opcode = type;
                         addBuffers[i].busy = true;
-                        // make conditional statment for type if DADD make the addbuffer[i].time =
-                        // addlatnecy if SUBI make the addbuffer[i].time = sublatency
-                        addBuffers[i].time = type.equals("DADD") ? addLatency : subLatency;
+                        addBuffers[i].instruction = inst;
+                        addBuffers[i].time = type.equals("ADD.D") ? addLatency : subLatency;
                         registerFile.registers[resultIndex].Qi = addBuffers[i].tag;
                         registerFile.registers[resultIndex].busy = true;
                         inst.issue = cycle;
                         inst.tag = addBuffers[i].tag;
+                        break;
                     } else {
-                        // ADDI or SUBI
+                        // ADDI or SUBI or DADDI or DSUBI
                         String firstOperand = inst.j;
                         int firstOperandIndex = Integer.parseInt(firstOperand.substring(1));
                         int resultIndex = Integer.parseInt(inst.i.substring(1));
-                        int value = Integer.parseInt(inst.k);
+                        int value = inst.value;
                         if (registerFile.registers[firstOperandIndex].busy == false) {
                             addBuffers[i].Qi = null;
                             addBuffers[i].Vi = Integer.parseInt(registerFile.registers[firstOperandIndex].Qi);
@@ -199,13 +231,15 @@ public class tomasulo {
                         registerFile.registers[resultIndex].Qi = addBuffers[i].tag;
                         addBuffers[i].busy = true;
                         addBuffers[i].time = ADDILatency;
+                        addBuffers[i].instruction = inst;
                         registerFile.registers[resultIndex].busy = true;
                         inst.issue = cycle;
                         inst.tag = addBuffers[i].tag;
+                        break;
                     }
                 } else {
-                    System.out.println("add buffer is full");
-                    return;
+                    System.out.println("add " + addBuffers[i].tag + "buffer is full");
+                    continue;
                 }
             }
         }
@@ -233,14 +267,16 @@ public class tomasulo {
                     }
                     mulBuffers[i].opcode = type;
                     mulBuffers[i].busy = true;
+                    mulBuffers[i].instruction = inst;
                     registerFile.registers[resultIndex].Qi = mulBuffers[i].tag;
                     registerFile.registers[resultIndex].busy = true;
                     mulBuffers[i].time = type.equals("MUL.D") ? mulLatency : divLatency;
                     inst.issue = cycle;
                     inst.tag = mulBuffers[i].tag;
+                    break;
                 } else {
-                    System.out.println("mul buffer is full");
-                    return;
+                    System.out.println("mul " + mulBuffers[i].tag + "buffer is full");
+                    continue;
                 }
             }
         }
@@ -252,13 +288,15 @@ public class tomasulo {
                     loadBuffers[i].address = address;
                     loadBuffers[i].busy = true;
                     loadBuffers[i].time = ldLatency;
+                    loadBuffers[i].instruction = inst;
                     registerFile.registers[Integer.parseInt(firstOperand.substring(1))].Qi = loadBuffers[i].tag;
                     registerFile.registers[Integer.parseInt(firstOperand.substring(1))].busy = true;
                     inst.issue = cycle;
                     inst.tag = loadBuffers[i].tag;
+                    break;
                 } else {
-                    System.out.println("load buffer is full");
-                    return;
+                    System.out.println("load " + loadBuffers[i].tag + "buffer is full");
+                    continue;
                 }
             }
         }
@@ -270,17 +308,20 @@ public class tomasulo {
                     storeBuffers[i].address = address;
                     storeBuffers[i].busy = true;
                     storeBuffers[i].time = sdLatency;
+                    storeBuffers[i].instruction = inst;
                     if (registerFile.registers[Integer.parseInt(firstOperand.substring(1))].busy == true) {
                         storeBuffers[i].Q = registerFile.registers[Integer.parseInt(firstOperand.substring(1))].Qi;
+
                     } else {
                         storeBuffers[i].V = Integer
                                 .parseInt(registerFile.registers[Integer.parseInt(firstOperand.substring(1))].Qi);
                     }
                     inst.issue = cycle;
                     inst.tag = storeBuffers[i].tag;
+                    break;
                 } else {
-                    System.out.println("store buffer is full");
-                    return;
+                    System.out.println("store " + storeBuffers[i].tag + "buffer is full");
+                    continue;
                 }
             }
         }
@@ -292,19 +333,17 @@ public class tomasulo {
     public void execute() {
         for (reservationStation buffer : addBuffers) {
             if (buffer.busy == true) {
-                if (buffer.time == 1) {
+                if (buffer.time == 0) {
+                    instruction instruction = buffer.instruction;
                     // get the instruction from the executed array
-                    for (instruction instruction : executed) {
-                        if (instruction.tag.equals(buffer.tag)) {
-                            instruction.executionComplete = cycle;
-                            logicExecute(buffer, instruction);
-                            buffer.time--;
-                        }
-                    }
-                    buffer.busy = false;
-                    buffer.deleteStation();
+                    instruction.executionComplete = cycle;
+                    instruction.writeResult = cycle + 1;
+                    logicExecute(buffer, instruction);
+                    toBeWritten.add(instruction);
+                    buffer.time--;
+                    System.out.println("add " + buffer.tag + " is done" + "========================================");
                 } else {
-                    if (buffer.Qi == null && buffer.Qj == null) {
+                    if (buffer.Qi == null && buffer.Qj == null && buffer.instruction.issue != cycle) {
                         buffer.time--;
                     }
                 }
@@ -312,38 +351,36 @@ public class tomasulo {
         }
         for (reservationStation buffer : mulBuffers) {
             if (buffer.busy == true) {
-                if (buffer.time == 1) {
-                    // get the instruction from the executed array
-                    for (instruction instruction : executed) {
-                        if (instruction.tag.equals(buffer.tag)) {
-                            instruction.executionComplete = cycle;
-                            logicExecute(buffer, instruction);
-                            buffer.time--;
-                        }
+                if (buffer.time == 0) {
+                    // get the instruction from the executed array7
+                    instruction instruction = buffer.instruction;
+                    if (instruction.tag.equals(buffer.tag)) {
+                        instruction.executionComplete = cycle;
+                        instruction.writeResult = cycle + 1;
+                        logicExecute(buffer, instruction);
+                        toBeWritten.add(instruction);
+                        buffer.time--;
+
                     }
-                    buffer.busy = false;
-                    buffer.deleteStation();
                 } else {
                     if (buffer.Qi == null && buffer.Qj == null) {
                         buffer.time--;
+                        System.out.println("mul ==============================");
                     }
                 }
             }
         }
         for (loadBuffer buffer : loadBuffers) {
             if (buffer.busy == true) {
-                if (buffer.time == 1) {
-                    // get the instruction from the executed array
-                    for (instruction instruction : executed) {
-                        if (instruction.tag.equals(buffer.tag)) {
-                            instruction.executionComplete = cycle;
-                            instruction.writeResult = cycle+1;
-                            instruction.value = cache.read(buffer.address);
-                            buffer.time--;
-                        }
+                if (buffer.time == 0) {
+                    instruction instruction = buffer.instruction;
+                    if (instruction.tag.equals(buffer.tag)) {
+                        instruction.executionComplete = cycle;
+                        instruction.writeResult = cycle + 1;
+                        instruction.value = cache.read(buffer.address);
+                        toBeWritten.add(instruction);
+                        buffer.time--;
                     }
-                    buffer.busy = false;
-                    buffer.deleteBuffer();
                 } else {
                     buffer.time--;
                 }
@@ -352,19 +389,17 @@ public class tomasulo {
 
         for (storeBuffer buffer : storeBuffers) {
             if (buffer.busy == true) {
-                if (buffer.time == 1) {
-                    // get the instruction from the executed array
-                    for (instruction instruction : executed) {
-                        if (instruction.tag.equals(buffer.tag)) {
-                            instruction.executionComplete = cycle;
-                            instruction.writeResult = cycle+1;
-                            cache.write(buffer.address, buffer.V);
-                            buffer.time--;
-                        }
+                if (buffer.time == 0) {
+                    instruction instruction = buffer.instruction;
+                    if (instruction.tag.equals(buffer.tag)) {
+                        instruction.executionComplete = cycle;
+                        instruction.writeResult = cycle + 1;
+                        cache.write(buffer.address, buffer.V);
+                        toBeWritten.add(instruction);
+                        buffer.time--;
+
                     }
-                    buffer.busy = false;
-                    buffer.deleteBuffer();
-                } else {
+                } else if (buffer.Q == null) {
                     buffer.time--;
                 }
             }
@@ -372,9 +407,88 @@ public class tomasulo {
     }
 
     public void writeBack() {
-        // loop on all buffers if the time is 0 then i will remove it from the array and
-        // add it to the to be written array and publish its result to the register file
-        // and the bus
+        ArrayList<instruction> writingBack = new ArrayList<instruction>();
+        for (instruction inst : toBeWritten) {
+            if (inst.writeResult == cycle + 1) {
+                writingBack.add(inst);
+            }
+        }
+
+        for (reservationStation buffer : addBuffers) {
+            if (buffer.time == -1) {
+                System.out.println("add " + buffer.tag + " is done" + "========================================");
+                instruction inst = buffer.instruction;
+                if (registerFile.registers[Integer.parseInt(inst.i.substring(1))].Qi == buffer.tag) {
+                    registerFile.registers[Integer.parseInt(inst.i.substring(1))].Qi = inst.value + "";
+                    registerFile.registers[Integer.parseInt(inst.i.substring(1))].busy = false;
+                }
+                buffer.deleteStation();
+            }
+            if (buffer.Qi != null) {
+                for (instruction inst : writingBack) {
+                    if (inst.tag.equals(buffer.Qi)) {
+                        buffer.Vi = inst.value;
+                        buffer.Qi = null;
+                    }
+                }
+            }
+            if (buffer.Qj != null) {
+                for (instruction inst : writingBack) {
+                    if (inst.tag.equals(buffer.Qj)) {
+                        buffer.Vj = inst.value;
+                        buffer.Qj = null;
+                    }
+                }
+            }
+        }
+        for (reservationStation buffer : mulBuffers) {
+            if (buffer.time == -1) {
+                instruction inst = buffer.instruction;
+                if (registerFile.registers[Integer.parseInt(inst.i.substring(1))].Qi == buffer.tag) {
+                    registerFile.registers[Integer.parseInt(inst.i.substring(1))].Qi = inst.value + "";
+                    registerFile.registers[Integer.parseInt(inst.i.substring(1))].busy = false;
+                }
+                buffer.deleteStation();
+            }
+            if (buffer.Qi != null) {
+                for (instruction inst : writingBack) {
+                    if (inst.tag.equals(buffer.Qi)) {
+                        buffer.Vi = inst.value;
+                        buffer.Qi = null;
+                        if (buffer.Qj == null)
+                            buffer.time = mulLatency;
+                    }
+                }
+            }
+            if (buffer.Qj != null) {
+                for (instruction inst : writingBack) {
+                    if (inst.tag.equals(buffer.Qj)) {
+                        buffer.Vj = inst.value;
+                        buffer.Qj = null;
+                        if (buffer.Qi == null)
+                            buffer.time = mulLatency;
+                    }
+                }
+            }
+        }
+        for (loadBuffer buffer : loadBuffers) {
+            if (buffer.time == -1) {
+                buffer.deleteBuffer();
+            }
+        }
+        for (storeBuffer buffer : storeBuffers) {
+            if (buffer.time == -1) {
+                buffer.deleteBuffer();
+            }
+            if (buffer.Q != null) {
+                for (instruction inst : writingBack) {
+                    if (inst.tag.equals(buffer.Q)) {
+                        buffer.V = inst.value;
+                        buffer.Q = null;
+                    }
+                }
+            }
+        }
     }
 
     private void logicExecute(reservationStation s, instruction inst) {
@@ -405,5 +519,29 @@ public class tomasulo {
         }
 
     }
-    //in the running function i need to check on all instructions time and check with clock if it need to be executed or not
+
+    public void run() {
+        while (true) {
+            cycle++;
+            System.out.println("Cycle: " + cycle);
+            issue();
+            execute();
+            writeBack();
+            printTomasuloDetails();
+            // the program will finish when
+            if (cycle == 7) {
+                break;
+            }
+
+        }
+        System.out.println("--------------------------------------------------");
+        // print the first issued instruction
+        if (issued.size() > 0) {
+            System.out.println("First issued instruction: " + issued.get(0));
+        }
+
+        System.out.println(registerFile.registers[2].Qi);
+    }
+    // in the running function i need to check on all instructions time and check
+    // with clock if it need to be executed or not
 }

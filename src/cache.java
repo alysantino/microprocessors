@@ -13,6 +13,9 @@ public class cache {
 
     public cache(int n) {
         this.cacheCells = new cacheCell[n];
+        for (int i = 0; i < n; i++) {
+            cacheCells[i] = new cacheCell(i, 0);
+        }
     }
 
     public int read(int address) {

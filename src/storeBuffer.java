@@ -5,6 +5,7 @@ public class storeBuffer {
     public String tag;
     public String Q;
     public int time;
+    public instruction instruction;
 
 
     public storeBuffer(int address, int V, boolean busy, String tag, String Q) {
@@ -19,8 +20,8 @@ public class storeBuffer {
         this.address = 0;
         this.V = 0;
         this.busy = false;
-        this.tag = null;
         this.Q = null;
+        this.time=0;
     }
 
     public int getAddress() {
@@ -67,6 +68,7 @@ public class storeBuffer {
                 ", busy=" + busy +
                 ", tag=" + tag +
                 ", Q='" + Q + '\'' +
+                ", time="+ time+
                 '}';
     }
 
@@ -84,6 +86,8 @@ public class storeBuffer {
         this.busy = false;
         this.tag = null;
         this.Q = null;
+        this.time=0;
+
     }
 
 }

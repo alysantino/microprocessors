@@ -7,6 +7,7 @@ public class reservationStation {
     public String tag;
     public boolean busy;
     public int time;
+    public instruction instruction;
 
     public reservationStation(String opcode, int Vi, int Vj, String Qi, String Qj, String tag, boolean busy) {
         this.opcode = opcode;
@@ -34,8 +35,8 @@ public class reservationStation {
         this.Vj = 0;
         this.Qi = null;
         this.Qj = null;
-        this.tag = null;
         this.busy = false;
+        this.time=0;
     }
     @Override
     public String toString() {
@@ -47,6 +48,7 @@ public class reservationStation {
                 ", Qj='" + Qj + '\'' +
                 ", tag=" + tag +
                 ", busy=" + busy +
+                ", time=" + time +
                 '}';
     }
 

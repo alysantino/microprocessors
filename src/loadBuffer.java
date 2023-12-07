@@ -4,6 +4,8 @@ public class loadBuffer {
     public boolean busy;
     public String tag;
     public int time;
+    public instruction instruction;
+
 
     public loadBuffer(int address) {
         this.address = address;
@@ -13,6 +15,8 @@ public class loadBuffer {
     public void deleteBuffer() {
         this.address = 0;
         this.busy = false;
+        this.time=0;
+
 
     }
 
@@ -58,6 +62,7 @@ public class loadBuffer {
                 "address=" + address +
                 ", busy=" + busy +
                 ", tag=" + tag +
+                ", time="+ time+
                 '}';
     }
 }
