@@ -2,9 +2,7 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Scanner;
-
-import javax.sound.midi.SysexMessage;
+// import java.util.Scanner;
 
 public class tomasulo {
     // arraylist of instructions to add instrucyions read from file
@@ -32,6 +30,8 @@ public class tomasulo {
     registerFile registerFile = new registerFile();
     int ADDILatency = 1;
     int BNEZLatency = 1;
+    int pc = 0;
+    boolean branch = false;
 
     public void readInstructions() {
         String fileName = "src\\instructions.txt";
@@ -46,11 +46,11 @@ public class tomasulo {
                 String type = tokens[0];
                 String i = tokens[1];
 
-                if (type.equals("L.D") || type.equals("S.D")) {
+                if (type.equals("L.D") || type.equals("S.D") || type.equals("BNEZ")) {
                     int value = Integer.parseInt(tokens[2]);
                     instruction inst = new instruction(type, i, value);
                     program.add(inst);
-                } else if (type.equals("ADDI") || type.equals("SUBI")) {
+                } else if (type.equals("ADDI") || type.equals("SUBI") || type.equals("DADDI") || type.equals("DSUBI")) {
                     String j = tokens[2];
                     int value = Integer.parseInt(tokens[3]);
                     instruction inst = new instruction(type, i, j, value);
@@ -125,9 +125,7 @@ public class tomasulo {
     }
 
     public void printTomasuloDetails() {
-        // i need to print how these
-        // instructions are executed as well as the content of each reservation
-        // station/buffer, the register file, the cache
+
         System.out.println("Instructions:");
         for (instruction inst : program) {
             System.out.println(inst);
@@ -165,17 +163,24 @@ public class tomasulo {
         for (registerFile.register register : registerFile.registers) {
             System.out.println(register);
         }
-
     }
 
     // Your simulator should include ALU ops (FP adds, subs, multiply,
     // divide), (integer ADDI or SUBI needed for loops), loads and stores
     // and branches (BNEZ is enough).
     public void issue() {
-        if (program.size() == 0) {
+        instruction inst;
+        try {
+            inst = program.get(pc);
+        } catch (Exception e) {
+            System.out.println("program is in branch or finished");
             return;
         }
-        instruction inst = program.get(0);
+
+        if (branch == true) {
+            branch = false;
+            return;
+        }
         String type = inst.type;
         if (type.equals("ADD.D") || type.equals("SUB.D") || type.equals("ADDI") || type.equals("SUBI")
                 || type.equals("DADD") || type.equals("DSUB")
@@ -211,6 +216,7 @@ public class tomasulo {
                         registerFile.registers[resultIndex].busy = true;
                         inst.issue = cycle;
                         inst.tag = addBuffers[i].tag;
+                        pc++;
                         break;
                     } else {
                         // ADDI or SUBI or DADDI or DSUBI
@@ -235,10 +241,11 @@ public class tomasulo {
                         registerFile.registers[resultIndex].busy = true;
                         inst.issue = cycle;
                         inst.tag = addBuffers[i].tag;
+                        pc++;
                         break;
                     }
                 } else {
-                    System.out.println("add " + addBuffers[i].tag + "buffer is full");
+                    System.out.println("add " + addBuffers[i].tag + "buffer is busy");
                     continue;
                 }
             }
@@ -273,9 +280,10 @@ public class tomasulo {
                     mulBuffers[i].time = type.equals("MUL.D") ? mulLatency : divLatency;
                     inst.issue = cycle;
                     inst.tag = mulBuffers[i].tag;
+                    pc++;
                     break;
                 } else {
-                    System.out.println("mul " + mulBuffers[i].tag + "buffer is full");
+                    System.out.println("mul " + mulBuffers[i].tag + "buffer is busy");
                     continue;
                 }
             }
@@ -293,9 +301,10 @@ public class tomasulo {
                     registerFile.registers[Integer.parseInt(firstOperand.substring(1))].busy = true;
                     inst.issue = cycle;
                     inst.tag = loadBuffers[i].tag;
+                    pc++;
                     break;
                 } else {
-                    System.out.println("load " + loadBuffers[i].tag + "buffer is full");
+                    System.out.println("load " + loadBuffers[i].tag + "buffer is busy");
                     continue;
                 }
             }
@@ -318,15 +327,42 @@ public class tomasulo {
                     }
                     inst.issue = cycle;
                     inst.tag = storeBuffers[i].tag;
+                    pc++;
                     break;
                 } else {
-                    System.out.println("store " + storeBuffers[i].tag + "buffer is full");
+                    System.out.println("store " + storeBuffers[i].tag + "buffer is busy");
+                    continue;
+                }
+            }
+        }
+
+        if (type.equals("BNEZ")) {
+            for (int i = 0; i < numaddBuffers; i++) {
+                if (addBuffers[i].isempty()) {
+                    addBuffers[i].opcode = type;
+                    addBuffers[i].instruction = inst;
+                    branch = true;
+                    String firstOperand = inst.i;
+                    int firstOperandIndex = Integer.parseInt(firstOperand.substring(1));
+                    // branch will read from cahce and not from register file
+                    int value = cache.read(firstOperandIndex);
+                    addBuffers[i].Qi = null;
+                    addBuffers[i].Vi = value;
+                    addBuffers[i].Qj = null;
+                    addBuffers[i].Vj = 0;
+                    addBuffers[i].busy = true;
+                    addBuffers[i].time = BNEZLatency;
+                    inst.issue = cycle;
+                    inst.tag = addBuffers[i].tag;
+                    pc++;
+                    break;
+                } else {
+                    System.out.println("add " + addBuffers[i].tag + "buffer is busy");
                     continue;
                 }
             }
         }
         // todo: BNEZ
-        program.remove(0);
         issued.add(inst);
     }
 
@@ -335,13 +371,11 @@ public class tomasulo {
             if (buffer.busy == true) {
                 if (buffer.time == 0) {
                     instruction instruction = buffer.instruction;
-                    // get the instruction from the executed array
                     instruction.executionComplete = cycle;
                     instruction.writeResult = cycle + 1;
                     logicExecute(buffer, instruction);
                     toBeWritten.add(instruction);
                     buffer.time--;
-                    System.out.println("add " + buffer.tag + " is done" + "========================================");
                 } else {
                     if (buffer.Qi == null && buffer.Qj == null && buffer.instruction.issue != cycle) {
                         buffer.time--;
@@ -365,7 +399,6 @@ public class tomasulo {
                 } else {
                     if (buffer.Qi == null && buffer.Qj == null) {
                         buffer.time--;
-                        System.out.println("mul ==============================");
                     }
                 }
             }
@@ -416,7 +449,6 @@ public class tomasulo {
 
         for (reservationStation buffer : addBuffers) {
             if (buffer.time == -1) {
-                System.out.println("add " + buffer.tag + " is done" + "========================================");
                 instruction inst = buffer.instruction;
                 if (registerFile.registers[Integer.parseInt(inst.i.substring(1))].Qi == buffer.tag) {
                     registerFile.registers[Integer.parseInt(inst.i.substring(1))].Qi = inst.value + "";
@@ -492,10 +524,6 @@ public class tomasulo {
     }
 
     private void logicExecute(reservationStation s, instruction inst) {
-        // reservationStation is respsnisble for executing the instruction ADD.D or
-        // SUB.D or ADDI or SUBI or DADD or DSUB or DADDI or DSUBI or DIV.D or MUL.D
-        // so i need to check on the opcode and then i will know what to do on the vi
-        // and vj and the time
         if (s.opcode.equals("ADD.D")) {
             inst.value = s.Vi + s.Vj;
         } else if (s.opcode.equals("SUB.D")) {
@@ -516,8 +544,46 @@ public class tomasulo {
             inst.value = s.Vi / s.Vj;
         } else if (s.opcode.equals("MUL.D")) {
             inst.value = s.Vi * s.Vj;
+        } else if (s.opcode.equals("BNEZ")) {
+            if (s.Vi != 0) {
+                pc = 0;
+                System.out.println("branch taken=============================");
+                s.deleteStation();
+            } else {
+                System.out.println("branch not taken=============================");
+                s.deleteStation();
+            }
         }
 
+    }
+
+    private boolean checkEmptyBuffers() {
+        boolean empty = true;
+        for (reservationStation buffer : addBuffers) {
+            if (!buffer.isempty()) {
+                empty = false;
+                break;
+            }
+        }
+        for (reservationStation buffer : mulBuffers) {
+            if (!buffer.isempty()) {
+                empty = false;
+                break;
+            }
+        }
+        for (loadBuffer buffer : loadBuffers) {
+            if (!buffer.isempty()) {
+                empty = false;
+                break;
+            }
+        }
+        for (storeBuffer buffer : storeBuffers) {
+            if (!buffer.isempty()) {
+                empty = false;
+                break;
+            }
+        }
+        return empty;
     }
 
     public void run() {
@@ -529,18 +595,19 @@ public class tomasulo {
             writeBack();
             printTomasuloDetails();
             // the program will finish when
-            if (cycle == 7) {
-                break;
+            try {
+                program.get(pc);
+            } catch (Exception e) {
+                if (checkEmptyBuffers()) {
+                    break;
+                }
             }
 
         }
         System.out.println("--------------------------------------------------");
         // print the first issued instruction
-        if (issued.size() > 0) {
-            System.out.println("First issued instruction: " + issued.get(0));
-        }
+        System.out.println("the program is finished in " + cycle + " cycles");
 
-        System.out.println(registerFile.registers[2].Qi);
     }
     // in the running function i need to check on all instructions time and check
     // with clock if it need to be executed or not
