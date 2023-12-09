@@ -12,14 +12,14 @@ public class tomasulo {
     ArrayList<instruction> toBeWritten = new ArrayList<instruction>();
 
     int cycle = 0;
-    int addLatency = 1;
+    int addLatency = 4;
     int subLatency = 5;
-    int mulLatency = 5;
+    int mulLatency = 6;
     int divLatency = 5;
     int ldLatency = 5;
     int sdLatency = 5;
-    int numaddBuffers = 5;
-    int nummulBuffers = 5;
+    int numaddBuffers = 3;
+    int nummulBuffers = 2;
     int numLoadBuffers = 5;
     int numStoreBuffers = 5;
     reservationStation[] addBuffers;
@@ -176,9 +176,7 @@ public class tomasulo {
             System.out.println("program is in branch or finished");
             return;
         }
-
-        if (branch == true) {
-            branch = false;
+        if (branch) {
             return;
         }
         String type = inst.type;
@@ -280,6 +278,7 @@ public class tomasulo {
                     mulBuffers[i].time = type.equals("MUL.D") ? mulLatency : divLatency;
                     inst.issue = cycle;
                     inst.tag = mulBuffers[i].tag;
+                    System.out.println("========================================");
                     pc++;
                     break;
                 } else {
@@ -314,6 +313,7 @@ public class tomasulo {
                 if (storeBuffers[i].isempty()) {
                     String firstOperand = inst.i;
                     int address = inst.value;
+                    cache.makeBusy(address);
                     storeBuffers[i].address = address;
                     storeBuffers[i].busy = true;
                     storeBuffers[i].time = sdLatency;
@@ -345,9 +345,12 @@ public class tomasulo {
                     String firstOperand = inst.i;
                     int firstOperandIndex = Integer.parseInt(firstOperand.substring(1));
                     // branch will read from cahce and not from register file
-                    int value = cache.read(firstOperandIndex);
+                    if (cache.isBusy(inst.value)) {
+                        System.out.println("There is a function that is writing to this address");
+                        continue;
+                    }
                     addBuffers[i].Qi = null;
-                    addBuffers[i].Vi = value;
+                    addBuffers[i].Vi = firstOperandIndex;
                     addBuffers[i].Qj = null;
                     addBuffers[i].Vj = 0;
                     addBuffers[i].busy = true;
@@ -440,13 +443,23 @@ public class tomasulo {
     }
 
     public void writeBack() {
+        instruction writeback;
+        try {
+            writeback = toBeWritten.get(0);
+        } catch (Exception e) {
+            return;
+        }
         ArrayList<instruction> writingBack = new ArrayList<instruction>();
         for (instruction inst : toBeWritten) {
             if (inst.writeResult == cycle + 1) {
-                writingBack.add(inst);
+                if (inst.issue <= writeback.issue) {
+                    writeback = inst;
+                    writingBack.add(inst);
+                } else {
+                    inst.writeResult++;
+                }
             }
         }
-
         for (reservationStation buffer : addBuffers) {
             if (buffer.time == -1) {
                 instruction inst = buffer.instruction;
@@ -510,6 +523,7 @@ public class tomasulo {
         }
         for (storeBuffer buffer : storeBuffers) {
             if (buffer.time == -1) {
+                cache.makeNotBusy(buffer.address);
                 buffer.deleteBuffer();
             }
             if (buffer.Q != null) {
@@ -521,32 +535,44 @@ public class tomasulo {
                 }
             }
         }
+        toBeWritten.removeAll(writingBack);
     }
 
     private void logicExecute(reservationStation s, instruction inst) {
         if (s.opcode.equals("ADD.D")) {
             inst.value = s.Vi + s.Vj;
-        } else if (s.opcode.equals("SUB.D")) {
+        }
+        if (s.opcode.equals("SUB.D")) {
             inst.value = s.Vi - s.Vj;
-        } else if (s.opcode.equals("ADDI")) {
+        }
+        if (s.opcode.equals("ADDI")) {
             inst.value = s.Vi + s.Vj;
-        } else if (s.opcode.equals("SUBI")) {
+        }
+        if (s.opcode.equals("SUBI")) {
             inst.value = s.Vi - s.Vj;
-        } else if (s.opcode.equals("DADD")) {
+        }
+        if (s.opcode.equals("DADD")) {
             inst.value = s.Vi + s.Vj;
-        } else if (s.opcode.equals("DSUB")) {
+        }
+        if (s.opcode.equals("DSUB")) {
             inst.value = s.Vi - s.Vj;
-        } else if (s.opcode.equals("DADDI")) {
+        }
+        if (s.opcode.equals("DADDI")) {
             inst.value = s.Vi + s.Vj;
-        } else if (s.opcode.equals("DSUBI")) {
+        }
+        if (s.opcode.equals("DSUBI")) {
             inst.value = s.Vi - s.Vj;
-        } else if (s.opcode.equals("DIV.D")) {
+        }
+        if (s.opcode.equals("DIV.D")) {
             inst.value = s.Vi / s.Vj;
-        } else if (s.opcode.equals("MUL.D")) {
+        }
+        if (s.opcode.equals("MUL.D")) {
             inst.value = s.Vi * s.Vj;
-        } else if (s.opcode.equals("BNEZ")) {
-            if (s.Vi != 0) {
-                pc = 0;
+        }
+        if (s.opcode.equals("BNEZ")) {
+            int value= cache.read(s.Vi);
+            if (value!= 0) {
+                branchTaken(0);
                 System.out.println("branch taken=============================");
                 s.deleteStation();
             } else {
@@ -555,6 +581,29 @@ public class tomasulo {
             }
         }
 
+    }
+
+    private void branchTaken(int address) {
+        // create new instructions from the address untill a branch is found and add
+        // them to the program
+        while (!program.get(address).type.equals("BNEZ")) {
+            System.out.println("adding instruction " + program.get(address).type);
+            instruction newInst;
+            instruction inst = program.get(address);
+            if (inst.type.equals("L.D") || inst.type.equals("S.D")) {
+                newInst = new instruction(inst.type, inst.i, inst.value);
+            } else if (inst.type.equals("ADDI") || inst.type.equals("SUBI") || inst.type.equals("DADDI")
+                    || inst.type.equals("DSUBI")) {
+                newInst = new instruction(inst.type, inst.i, inst.j, inst.value);
+            } else if (inst.type.equals("ADD.D") || inst.type.equals("SUB.D") || inst.type.equals("DADD")
+                    || inst.type.equals("DSUB")) {
+                newInst = new instruction(inst.type, inst.i, inst.j, inst.k);
+            } else
+                newInst = new instruction(inst.type, inst.i, inst.j, inst.k);
+
+            program.add(newInst);
+            address++;
+        }
     }
 
     private boolean checkEmptyBuffers() {
@@ -590,6 +639,7 @@ public class tomasulo {
         while (true) {
             cycle++;
             System.out.println("Cycle: " + cycle);
+            System.out.println("pc=" + pc);
             issue();
             execute();
             writeBack();
@@ -603,11 +653,21 @@ public class tomasulo {
                 }
             }
 
+            if (cycle == 20) {
+            break;
+            }
+
         }
         System.out.println("--------------------------------------------------");
         // print the first issued instruction
-        System.out.println("the program is finished in " + cycle + " cycles");
-
+        int cycles = cycle + 1;
+        System.out.println("the program is finished in " + cycles + " cycles");
+        // print each instruction issue, execution complete, and write result times
+        for (instruction inst : program) {
+            System.out.println(
+                    inst.type + " The instruction is issued on cycle " + inst.issue + " and finished executing on "
+                            + inst.executionComplete + " then wrote back in cycle " + inst.writeResult);
+        }
     }
     // in the running function i need to check on all instructions time and check
     // with clock if it need to be executed or not

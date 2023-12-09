@@ -4,6 +4,7 @@ public class cache {
     public class cacheCell {
         public int address;
         public int value;
+        public boolean busy;
 
         public cacheCell(int address, int value) {
             this.address = address;
@@ -14,7 +15,7 @@ public class cache {
     public cache(int n) {
         this.cacheCells = new cacheCell[n];
         for (int i = 0; i < n; i++) {
-            cacheCells[i] = new cacheCell(i, 0);
+            cacheCells[i] = new cacheCell(i, 1);
         }
     }
 
@@ -33,6 +34,31 @@ public class cache {
                 cacheCells[i].value = value;
             }
         }
+    }
+
+    public void makeBusy(int address) {
+        for (int i = 0; i < cacheCells.length; i++) {
+            if (cacheCells[i].address == address) {
+                cacheCells[i].busy = true;
+            }
+        }
+    }
+
+    public void makeNotBusy(int address) {
+        for (int i = 0; i < cacheCells.length; i++) {
+            if (cacheCells[i].address == address) {
+                cacheCells[i].busy = false;
+            }
+        }
+    }
+
+    public boolean isBusy(int address) {
+        for (int i = 0; i < cacheCells.length; i++) {
+            if (cacheCells[i].address == address) {
+                return cacheCells[i].busy;
+            }
+        }
+        return false;
     }
 
 }
