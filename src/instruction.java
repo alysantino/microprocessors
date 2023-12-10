@@ -20,15 +20,18 @@ public class instruction {
         this.type = type;
         this.i = i;
         this.j = j;
-        this.value = value;
+        this.k = value + "";
     }
 
     public instruction(String type, String i, int value) {
         this.type = type;
         this.i = i;
-        this.value = value;
+        this.k = value + "";
 
     }
+    public instruction() {
+    }
+
     //toString method for debugging
     @Override
     public String toString() {

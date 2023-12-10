@@ -32,6 +32,7 @@ public class tomasulo {
     int BNEZLatency = 1;
     int pc = 0;
     boolean branch = false;
+    ArrayList<reservationStation> toBeDeleted = new ArrayList<reservationStation>();
 
     public void readInstructions() {
         String fileName = "src\\instructions.txt";
@@ -135,7 +136,7 @@ public class tomasulo {
             System.out.println(inst);
         }
 
-        System.out.println("Executed:");
+        System.out.println("Executing instructions:");
         for (instruction inst : executed) {
             System.out.println(inst);
         }
@@ -221,7 +222,8 @@ public class tomasulo {
                         String firstOperand = inst.j;
                         int firstOperandIndex = Integer.parseInt(firstOperand.substring(1));
                         int resultIndex = Integer.parseInt(inst.i.substring(1));
-                        int value = inst.value;
+                        int value = Integer.parseInt(inst.k);
+                        System.out.println("value is " + value);
                         if (registerFile.registers[firstOperandIndex].busy == false) {
                             addBuffers[i].Qi = null;
                             addBuffers[i].Vi = Integer.parseInt(registerFile.registers[firstOperandIndex].Qi);
@@ -344,15 +346,14 @@ public class tomasulo {
                     branch = true;
                     String firstOperand = inst.i;
                     int firstOperandIndex = Integer.parseInt(firstOperand.substring(1));
-                    // branch will read from cahce and not from register file
-                    if (cache.isBusy(inst.value)) {
-                        System.out.println("There is a function that is writing to this address");
-                        continue;
+                    // branch will read from register file
+                    if (registerFile.registers[firstOperandIndex].busy == false) {
+                        addBuffers[i].Qi = null;
+                        addBuffers[i].Vi = Integer.parseInt(registerFile.registers[firstOperandIndex].Qi);
+                    } else {
+                        addBuffers[i].Qi = registerFile.registers[firstOperandIndex].Qi;
+                        addBuffers[i].Vi = 0;
                     }
-                    addBuffers[i].Qi = null;
-                    addBuffers[i].Vi = firstOperandIndex;
-                    addBuffers[i].Qj = null;
-                    addBuffers[i].Vj = 0;
                     addBuffers[i].busy = true;
                     addBuffers[i].time = BNEZLatency;
                     inst.issue = cycle;
@@ -371,22 +372,39 @@ public class tomasulo {
 
     public void execute() {
         for (reservationStation buffer : addBuffers) {
+            if (buffer.time == -1) {
+                instruction instruction = buffer.instruction;
+                toBeWritten.add(instruction);
+                buffer.time--;
+                continue;
+            }
             if (buffer.busy == true) {
                 if (buffer.time == 0) {
                     instruction instruction = buffer.instruction;
-                    instruction.executionComplete = cycle;
-                    instruction.writeResult = cycle + 1;
-                    logicExecute(buffer, instruction);
-                    toBeWritten.add(instruction);
-                    buffer.time--;
-                } else {
-                    if (buffer.Qi == null && buffer.Qj == null && buffer.instruction.issue != cycle) {
+                    if (instruction.tag.equals(buffer.tag)) {
+                        instruction.executionComplete = cycle;
+                        instruction.writeResult = cycle + 1;
+                        executed.add(instruction);
+                        logicExecute(buffer, instruction);
                         buffer.time--;
+                    }
+
+                } else {
+                    if (buffer.Qi == null && buffer.Qj == null) {
+                        instruction instruction = buffer.instruction;
+                        buffer.time--;
+                        executed.add(instruction);
                     }
                 }
             }
         }
         for (reservationStation buffer : mulBuffers) {
+            if (buffer.time == -1) {
+                instruction instruction = buffer.instruction;
+                toBeWritten.add(instruction);
+                buffer.time--;
+                continue;
+            }
             if (buffer.busy == true) {
                 if (buffer.time == 0) {
                     // get the instruction from the executed array7
@@ -395,36 +413,48 @@ public class tomasulo {
                         instruction.executionComplete = cycle;
                         instruction.writeResult = cycle + 1;
                         logicExecute(buffer, instruction);
-                        toBeWritten.add(instruction);
                         buffer.time--;
-
                     }
                 } else {
                     if (buffer.Qi == null && buffer.Qj == null) {
+                        instruction instruction = buffer.instruction;
                         buffer.time--;
+                        executed.add(instruction);
                     }
                 }
             }
         }
         for (loadBuffer buffer : loadBuffers) {
             if (buffer.busy == true) {
+                if (buffer.time == -1) {
+                    instruction instruction = buffer.instruction;
+                    toBeWritten.add(instruction);
+                    buffer.time--;
+                    continue;
+                }
                 if (buffer.time == 0) {
                     instruction instruction = buffer.instruction;
                     if (instruction.tag.equals(buffer.tag)) {
                         instruction.executionComplete = cycle;
                         instruction.writeResult = cycle + 1;
                         instruction.value = cache.read(buffer.address);
-                        toBeWritten.add(instruction);
+                        executed.add(instruction);
                         buffer.time--;
                     }
                 } else {
+                    instruction instruction = buffer.instruction;
                     buffer.time--;
+                    executed.add(instruction);
                 }
             }
         }
 
         for (storeBuffer buffer : storeBuffers) {
             if (buffer.busy == true) {
+                if (buffer.time == -1) {
+                    buffer.time--;
+                    continue;
+                }
                 if (buffer.time == 0) {
                     instruction instruction = buffer.instruction;
                     if (instruction.tag.equals(buffer.tag)) {
@@ -436,72 +466,57 @@ public class tomasulo {
 
                     }
                 } else if (buffer.Q == null) {
+                    instruction instruction = buffer.instruction;
                     buffer.time--;
+                    executed.add(instruction);
+
                 }
             }
         }
     }
 
     public void writeBack() {
-        instruction writeback;
-        try {
-            writeback = toBeWritten.get(0);
-        } catch (Exception e) {
-            return;
-        }
         ArrayList<instruction> writingBack = new ArrayList<instruction>();
+        int issuecycle = 1000000000;
+        for (instruction instruction : toBeWritten) {
+            if (instruction.issue <= issuecycle) {
+                issuecycle = instruction.issue;
+            }
+        }
+        for (instruction instruction : toBeWritten) {
+            if (instruction.writeResult == cycle && instruction.issue == issuecycle) {
+                writingBack.add(instruction);
+                toBeWritten.remove(instruction);
+                break;
+            }
+        }
         for (instruction inst : toBeWritten) {
-            if (inst.writeResult == cycle + 1) {
-                if (inst.issue <= writeback.issue) {
-                    writeback = inst;
-                    writingBack.add(inst);
-                } else {
-                    inst.writeResult++;
-                }
-            }
+            inst.writeResult = cycle + 1;
         }
+
         for (reservationStation buffer : addBuffers) {
+            if (buffer.time == -2) {
+                buffer.deleteStation();
+                continue;
+            }
             if (buffer.time == -1) {
                 instruction inst = buffer.instruction;
                 if (registerFile.registers[Integer.parseInt(inst.i.substring(1))].Qi == buffer.tag) {
                     registerFile.registers[Integer.parseInt(inst.i.substring(1))].Qi = inst.value + "";
                     registerFile.registers[Integer.parseInt(inst.i.substring(1))].busy = false;
                 }
-                buffer.deleteStation();
+                // buffer.deleteStation();
             }
             if (buffer.Qi != null) {
                 for (instruction inst : writingBack) {
                     if (inst.tag.equals(buffer.Qi)) {
                         buffer.Vi = inst.value;
                         buffer.Qi = null;
-                    }
-                }
-            }
-            if (buffer.Qj != null) {
-                for (instruction inst : writingBack) {
-                    if (inst.tag.equals(buffer.Qj)) {
-                        buffer.Vj = inst.value;
-                        buffer.Qj = null;
-                    }
-                }
-            }
-        }
-        for (reservationStation buffer : mulBuffers) {
-            if (buffer.time == -1) {
-                instruction inst = buffer.instruction;
-                if (registerFile.registers[Integer.parseInt(inst.i.substring(1))].Qi == buffer.tag) {
-                    registerFile.registers[Integer.parseInt(inst.i.substring(1))].Qi = inst.value + "";
-                    registerFile.registers[Integer.parseInt(inst.i.substring(1))].busy = false;
-                }
-                buffer.deleteStation();
-            }
-            if (buffer.Qi != null) {
-                for (instruction inst : writingBack) {
-                    if (inst.tag.equals(buffer.Qi)) {
-                        buffer.Vi = inst.value;
-                        buffer.Qi = null;
-                        if (buffer.Qj == null)
-                            buffer.time = mulLatency;
+                        if (buffer.Qj == null) {
+                            buffer.time = getLatency(buffer.opcode) - 1;
+                            System.out.println("buffer time is " + buffer.time + " for " + inst.type);
+
+                        }
                     }
                 }
             }
@@ -511,18 +526,51 @@ public class tomasulo {
                         buffer.Vj = inst.value;
                         buffer.Qj = null;
                         if (buffer.Qi == null)
-                            buffer.time = mulLatency;
+                            buffer.time = getLatency(buffer.opcode) - 1;
+                    }
+                }
+            }
+        }
+        for (reservationStation buffer : mulBuffers) {
+            if (buffer.time == -2) {
+                buffer.deleteStation();
+            }
+            if (buffer.time == -1) {
+                instruction inst = buffer.instruction;
+                if (registerFile.registers[Integer.parseInt(inst.i.substring(1))].Qi == buffer.tag) {
+                    registerFile.registers[Integer.parseInt(inst.i.substring(1))].Qi = inst.value + "";
+                    registerFile.registers[Integer.parseInt(inst.i.substring(1))].busy = false;
+                }
+                // buffer.deleteStation();
+            }
+            if (buffer.Qi != null) {
+                for (instruction inst : writingBack) {
+                    if (inst.tag.equals(buffer.Qi)) {
+                        buffer.Vi = inst.value;
+                        buffer.Qi = null;
+                        if (buffer.Qj == null)
+                            buffer.time = getLatency(buffer.opcode) - 1;
+                    }
+                }
+            }
+            if (buffer.Qj != null) {
+                for (instruction inst : writingBack) {
+                    if (inst.tag.equals(buffer.Qj)) {
+                        buffer.Vj = inst.value;
+                        buffer.Qj = null;
+                        if (buffer.Qi == null)
+                            buffer.time = getLatency(buffer.opcode) - 1;
                     }
                 }
             }
         }
         for (loadBuffer buffer : loadBuffers) {
-            if (buffer.time == -1) {
+            if (buffer.time == -2) {
                 buffer.deleteBuffer();
             }
         }
         for (storeBuffer buffer : storeBuffers) {
-            if (buffer.time == -1) {
+            if (buffer.time == -2) {
                 cache.makeNotBusy(buffer.address);
                 buffer.deleteBuffer();
             }
@@ -535,7 +583,26 @@ public class tomasulo {
                 }
             }
         }
+        writingBack.clear();
         toBeWritten.removeAll(writingBack);
+    }
+
+    private int getLatency(String opcode) {
+        int latency = 0;
+        if (opcode.equals("ADD.D") || opcode.equals("SUB.D")) {
+            latency = opcode.equals("ADD.D") ? addLatency : subLatency;
+        } else if (opcode.equals("MUL.D") || opcode.equals("DIV.D")) {
+            latency = opcode.equals("MUL.D") ? mulLatency : divLatency;
+        } else if (opcode.equals("L.D")) {
+            latency = ldLatency;
+        } else if (opcode.equals("S.D")) {
+            latency = sdLatency;
+        } else {
+            latency = 1;
+        }
+        System.out.println("latency is " + latency + " for " + opcode);
+        return latency;
+
     }
 
     private void logicExecute(reservationStation s, instruction inst) {
@@ -570,22 +637,23 @@ public class tomasulo {
             inst.value = s.Vi * s.Vj;
         }
         if (s.opcode.equals("BNEZ")) {
-            int value= cache.read(s.Vi);
-            if (value!= 0) {
+            if (s.Vi != 0) {
                 branchTaken(0);
                 System.out.println("branch taken=============================");
-                s.deleteStation();
+                branch = false;
+                // s.deleteStation();
             } else {
                 System.out.println("branch not taken=============================");
-                s.deleteStation();
+                branch = false;
+                // s.deleteStation();
             }
         }
-
     }
 
     private void branchTaken(int address) {
         // create new instructions from the address untill a branch is found and add
         // them to the program
+        int i = address;
         while (!program.get(address).type.equals("BNEZ")) {
             System.out.println("adding instruction " + program.get(address).type);
             instruction newInst;
@@ -594,7 +662,7 @@ public class tomasulo {
                 newInst = new instruction(inst.type, inst.i, inst.value);
             } else if (inst.type.equals("ADDI") || inst.type.equals("SUBI") || inst.type.equals("DADDI")
                     || inst.type.equals("DSUBI")) {
-                newInst = new instruction(inst.type, inst.i, inst.j, inst.value);
+                newInst = new instruction(inst.type, inst.i, inst.j, inst.k);
             } else if (inst.type.equals("ADD.D") || inst.type.equals("SUB.D") || inst.type.equals("DADD")
                     || inst.type.equals("DSUB")) {
                 newInst = new instruction(inst.type, inst.i, inst.j, inst.k);
@@ -603,7 +671,11 @@ public class tomasulo {
 
             program.add(newInst);
             address++;
+            i++;
         }
+        instruction branch = new instruction(program.get(address).type, program.get(address).i,
+                program.get(address).value);
+        program.add(branch);
     }
 
     private boolean checkEmptyBuffers() {
@@ -644,23 +716,29 @@ public class tomasulo {
             execute();
             writeBack();
             printTomasuloDetails();
+            executed.clear();
             // the program will finish when
             try {
                 program.get(pc);
             } catch (Exception e) {
                 if (checkEmptyBuffers()) {
+                    System.out.println("program is finished in cycle " + cycle);
                     break;
                 }
             }
 
-            if (cycle == 20) {
-            break;
-            }
+            // if (cycle == 10)
+            //     break;
 
         }
         System.out.println("--------------------------------------------------");
         // print the first issued instruction
-        int cycles = cycle + 1;
+        int cycles = 0;
+        for (instruction inst : program) {
+            if (inst.writeResult > cycles) {
+                cycles = inst.writeResult;
+            }
+        }
         System.out.println("the program is finished in " + cycles + " cycles");
         // print each instruction issue, execution complete, and write result times
         for (instruction inst : program) {

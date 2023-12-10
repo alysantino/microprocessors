@@ -40,7 +40,7 @@ public class reservationStation {
     }
     @Override
     public String toString() {
-        return "addStation{" +
+        return "Station{" +
                 "opcode='" + opcode + '\'' +
                 ", Vi=" + Vi +
                 ", Vj=" + Vj +
