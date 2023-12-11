@@ -5,17 +5,30 @@ public class cache {
         public int address;
         public int value;
         public boolean busy;
+        public String tag;
 
-        public cacheCell(int address, int value) {
+        public cacheCell(int address, int value, int n) {
             this.address = address;
             this.value = value;
+            this.busy = false;
+            this.tag = n+"";
+        }
+
+        @Override
+        public String toString() {
+            return "cacheCell{" +
+                    "address=" + address +
+                    ", value=" + value +
+                    ", busy=" + busy +
+                    ", tag='" + tag + '\'' +
+                    '}';
         }
     }
 
     public cache(int n) {
         this.cacheCells = new cacheCell[n];
         for (int i = 0; i < n; i++) {
-            cacheCells[i] = new cacheCell(i, 1);
+            cacheCells[i] = new cacheCell(i, 1,i);
         }
     }
 
@@ -59,6 +72,25 @@ public class cache {
             }
         }
         return false;
+    }
+
+    public cacheCell getCacheCell(int address) {
+        for (int i = 0; i < cacheCells.length; i++) {
+            if (cacheCells[i].address == address) {
+                return cacheCells[i];
+            }
+        }
+        return null;
+    }
+
+    //toString method for debugging
+    @Override
+    public String toString() {
+        String s = "";
+        for (int i = 0; i < cacheCells.length; i++) {
+            s += cacheCells[i].address + " " + cacheCells[i].value + " " + cacheCells[i].busy + "\n";
+        }
+        return s;
     }
 
 }

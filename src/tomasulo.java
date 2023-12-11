@@ -293,7 +293,7 @@ public class tomasulo {
             for (int i = 0; i < numLoadBuffers; i++) {
                 if (loadBuffers[i].isempty()) {
                     String firstOperand = inst.i;
-                    int address = inst.value;
+                    int address = Integer.parseInt(inst.k);
                     loadBuffers[i].address = address;
                     loadBuffers[i].busy = true;
                     loadBuffers[i].time = ldLatency;
@@ -302,6 +302,10 @@ public class tomasulo {
                     registerFile.registers[Integer.parseInt(firstOperand.substring(1))].busy = true;
                     inst.issue = cycle;
                     inst.tag = loadBuffers[i].tag;
+                    if (!cache.isBusy(address)) {
+                        cache.makeBusy(address);
+                        cache.getCacheCell(address).tag = loadBuffers[i].tag;
+                    }
                     pc++;
                     break;
                 } else {
@@ -314,8 +318,7 @@ public class tomasulo {
             for (int i = 0; i < numStoreBuffers; i++) {
                 if (storeBuffers[i].isempty()) {
                     String firstOperand = inst.i;
-                    int address = inst.value;
-                    cache.makeBusy(address);
+                    int address = Integer.parseInt(inst.k);
                     storeBuffers[i].address = address;
                     storeBuffers[i].busy = true;
                     storeBuffers[i].time = sdLatency;
@@ -329,6 +332,10 @@ public class tomasulo {
                     }
                     inst.issue = cycle;
                     inst.tag = storeBuffers[i].tag;
+                    if (!cache.isBusy(address)) {
+                        cache.makeBusy(address);
+                        cache.getCacheCell(address).tag = storeBuffers[i].tag;
+                    }
                     pc++;
                     break;
                 } else {
@@ -438,13 +445,18 @@ public class tomasulo {
                         instruction.executionComplete = cycle;
                         instruction.writeResult = cycle + 1;
                         instruction.value = cache.read(buffer.address);
-                        executed.add(instruction);
                         buffer.time--;
                     }
-                } else {
+                } else if ((cache.isBusy(buffer.address) && cache.getCacheCell(buffer.address).tag.equals(buffer.tag))
+                        || (!cache.isBusy(buffer.address)) && checkOrderLoadInst(buffer.instruction)) {
                     instruction instruction = buffer.instruction;
                     buffer.time--;
                     executed.add(instruction);
+                    cache.makeBusy(buffer.address);
+                    cache.getCacheCell(buffer.address).tag = buffer.tag;
+                } else {
+                    System.out.println(
+                            "there is another instruction storing in this address so the value is dirty and is waiting for the correct value");
                 }
             }
         }
@@ -465,11 +477,19 @@ public class tomasulo {
                         buffer.time--;
 
                     }
-                } else if (buffer.Q == null) {
+                } else if (buffer.Q == null
+                        && ((cache.isBusy(buffer.address) && cache.getCacheCell(buffer.address).tag.equals(buffer.tag))
+                                || (!cache.isBusy(buffer.address)) && checkOrderStoreInst(buffer.instruction))) {
                     instruction instruction = buffer.instruction;
                     buffer.time--;
                     executed.add(instruction);
-
+                    cache.makeBusy(buffer.address);
+                    cache.getCacheCell(buffer.address).tag = buffer.tag;
+                } else {
+                    System.out.println(
+                            "there is another instruction loading in this address so the value is dirty and is waiting for the correct value");
+                    System.out.println(cache.getCacheCell(buffer.address));
+                    System.out.println(checkOrderStoreInst(buffer.instruction));
                 }
             }
         }
@@ -568,17 +588,28 @@ public class tomasulo {
             if (buffer.time == -2) {
                 buffer.deleteBuffer();
             }
+            if (buffer.time == -1) {
+                instruction inst = buffer.instruction;
+                if (registerFile.registers[Integer.parseInt(inst.i.substring(1))].Qi == buffer.tag) {
+                    registerFile.registers[Integer.parseInt(inst.i.substring(1))].Qi = inst.value + "";
+                    registerFile.registers[Integer.parseInt(inst.i.substring(1))].busy = false;
+                }
+                cache.makeNotBusy(buffer.address);
+            }
         }
         for (storeBuffer buffer : storeBuffers) {
             if (buffer.time == -2) {
-                cache.makeNotBusy(buffer.address);
                 buffer.deleteBuffer();
+            }
+            if (buffer.time == -1) {
+                cache.makeNotBusy(buffer.address);
             }
             if (buffer.Q != null) {
                 for (instruction inst : writingBack) {
                     if (inst.tag.equals(buffer.Q)) {
                         buffer.V = inst.value;
                         buffer.Q = null;
+                        buffer.time = sdLatency ;
                     }
                 }
             }
@@ -603,6 +634,28 @@ public class tomasulo {
         System.out.println("latency is " + latency + " for " + opcode);
         return latency;
 
+    }
+
+    private boolean checkOrderLoadInst(instruction s){
+        int issue = s.issue;
+        for(storeBuffer buffer: storeBuffers){
+            if(buffer.isBusy()&& buffer.instruction.issue < issue && buffer.time > 0){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean checkOrderStoreInst(instruction s){
+        int issue = s.issue;
+        System.out.println("issue is " + issue);
+        for(loadBuffer buffer: loadBuffers){
+            if(buffer.isBusy()&& buffer.instruction.issue < issue && buffer.time > 0){
+                System.out.println(" loadbuffer issue is " + buffer.instruction.issue);
+                return false;
+            }
+        }
+        return true;
     }
 
     private void logicExecute(reservationStation s, instruction inst) {
@@ -717,6 +770,8 @@ public class tomasulo {
             writeBack();
             printTomasuloDetails();
             executed.clear();
+            System.out.println("cache at address 10 is " + cache.getCacheCell(10).value);
+
             // the program will finish when
             try {
                 program.get(pc);
@@ -727,8 +782,8 @@ public class tomasulo {
                 }
             }
 
-            // if (cycle == 10)
-            //     break;
+            // if (cycle == 12)
+            // break;
 
         }
         System.out.println("--------------------------------------------------");
@@ -747,6 +802,4 @@ public class tomasulo {
                             + inst.executionComplete + " then wrote back in cycle " + inst.writeResult);
         }
     }
-    // in the running function i need to check on all instructions time and check
-    // with clock if it need to be executed or not
 }

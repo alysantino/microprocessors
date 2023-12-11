@@ -37,7 +37,7 @@ public class instruction {
     public String toString() {
         // print appriopriate instruction based on type
         if (type.equals("L.D") || type.equals("S.D")) {
-            return type + " " + i + " " + value;
+            return type + " " + i + " " + k;
         } else if (type.equals("ADDI") || type.equals("SUBI")) {
             return type + " " + i + " " + j + " " + value;
         } else {
