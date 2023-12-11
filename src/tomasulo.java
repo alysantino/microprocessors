@@ -3,6 +3,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 // import java.util.Scanner;
+import java.util.Scanner;
 
 public class tomasulo {
     // arraylist of instructions to add instrucyions read from file
@@ -22,6 +23,7 @@ public class tomasulo {
     int nummulBuffers = 2;
     int numLoadBuffers = 5;
     int numStoreBuffers = 5;
+    int  cacheSize = 100;
     reservationStation[] addBuffers;
     reservationStation[] mulBuffers;
     loadBuffer[] loadBuffers;
@@ -71,58 +73,62 @@ public class tomasulo {
 
     public tomasulo() {
         readInstructions();
-        // Scanner sc = new Scanner(System.in);
-        // System.out.println("Enter the latency of ADD instruction: ");
-        // int addLatency = sc.nextInt();
-        // this.addLatency = addLatency;
-        // System.out.println("Enter the latency of SUB instruction: ");
-        // int subLatency = sc.nextInt();
-        // this.subLatency = subLatency;
-        // System.out.println("Enter the latency of MUL instruction: ");
-        // int mulLatency = sc.nextInt();
-        // this.mulLatency = mulLatency;
-        // System.out.println("Enter the latency of DIV instruction: ");
-        // int divLatency = sc.nextInt();
-        // this.divLatency = divLatency;
-        // System.out.println("Enter the latency of LD instruction: ");
-        // int ldLatency = sc.nextInt();
-        // this.ldLatency = ldLatency;
-        // System.out.println("Enter the latency of SD instruction: ");
-        // int sdLatency = sc.nextInt();
-        // this.sdLatency = sdLatency;
-        // System.out.println("Enter the number of ADD reservation stations: ");
-        // int numaddBuffers = sc.nextInt();
-        // this.numaddBuffers = numaddBuffers;
+        Scanner sc = new Scanner(System.in);
+        System.out.println("Enter the latency of ADD instruction: ");
+        int addLatency = sc.nextInt();
+        this.addLatency = addLatency;
+        System.out.println("Enter the latency of SUB instruction: ");
+        int subLatency = sc.nextInt();
+        this.subLatency = subLatency;
+        System.out.println("Enter the latency of MUL instruction: ");
+        int mulLatency = sc.nextInt();
+        this.mulLatency = mulLatency;
+        System.out.println("Enter the latency of DIV instruction: ");
+        int divLatency = sc.nextInt();
+        this.divLatency = divLatency;
+        System.out.println("Enter the latency of LD instruction: ");
+        int ldLatency = sc.nextInt();
+        this.ldLatency = ldLatency;
+        System.out.println("Enter the latency of SD instruction: ");
+        int sdLatency = sc.nextInt();
+        this.sdLatency = sdLatency;
+        System.out.println("Enter the number of ADD reservation stations: ");
+        int numaddBuffers = sc.nextInt();
+        this.numaddBuffers = numaddBuffers;
         this.addBuffers = new reservationStation[numaddBuffers];
         for (int i = 0; i < numaddBuffers; i++) {
             addBuffers[i] = new reservationStation();
             addBuffers[i].tag = "A" + i + 1;
         }
-        // System.out.println("Enter the number of MUL reservation stations: ");
-        // int nummulBuffers = sc.nextInt();
-        // this.nummulBuffers = nummulBuffers;
+        System.out.println("Enter the number of MUL reservation stations: ");
+        int nummulBuffers = sc.nextInt();
+        this.nummulBuffers = nummulBuffers;
         this.mulBuffers = new reservationStation[nummulBuffers];
         for (int i = 0; i < nummulBuffers; i++) {
             mulBuffers[i] = new reservationStation();
             mulBuffers[i].tag = "M" + i + 1;
         }
-        // System.out.println("Enter the number of LD reservation stations: ");
-        // int numLoadBuffers = sc.nextInt();
-        // this.numLoadBuffers = numLoadBuffers;
+        System.out.println("Enter the number of LD reservation stations: ");
+        int numLoadBuffers = sc.nextInt();
+        this.numLoadBuffers = numLoadBuffers;
         this.loadBuffers = new loadBuffer[numLoadBuffers];
         for (int i = 0; i < numLoadBuffers; i++) {
             loadBuffers[i] = new loadBuffer();
             loadBuffers[i].tag = "L" + i + 1;
         }
-        // System.out.println("Enter the number of SD reservation stations: ");
-        // int numStoreBuffers = sc.nextInt();
-        // this.numStoreBuffers = numStoreBuffers;
+        System.out.println("Enter the number of SD reservation stations: ");
+        int numStoreBuffers = sc.nextInt();
+        this.numStoreBuffers = numStoreBuffers;
         this.storeBuffers = new storeBuffer[numStoreBuffers];
         for (int i = 0; i < numStoreBuffers; i++) {
             storeBuffers[i] = new storeBuffer();
             storeBuffers[i].tag = "S" + i + 1;
         }
-        cache = new cache(100);
+        System.out.println("Enter the size of cache: ");
+        int cacheSize = sc.nextInt();
+        this.cacheSize = cacheSize;
+        this.cache = new cache(cacheSize);
+        sc.close();
     }
 
     public void printTomasuloDetails() {
@@ -166,9 +172,6 @@ public class tomasulo {
         }
     }
 
-    // Your simulator should include ALU ops (FP adds, subs, multiply,
-    // divide), (integer ADDI or SUBI needed for loops), loads and stores
-    // and branches (BNEZ is enough).
     public void issue() {
         instruction inst;
         try {
@@ -223,7 +226,6 @@ public class tomasulo {
                         int firstOperandIndex = Integer.parseInt(firstOperand.substring(1));
                         int resultIndex = Integer.parseInt(inst.i.substring(1));
                         int value = Integer.parseInt(inst.k);
-                        System.out.println("value is " + value);
                         if (registerFile.registers[firstOperandIndex].busy == false) {
                             addBuffers[i].Qi = null;
                             addBuffers[i].Vi = Integer.parseInt(registerFile.registers[firstOperandIndex].Qi);
@@ -280,7 +282,6 @@ public class tomasulo {
                     mulBuffers[i].time = type.equals("MUL.D") ? mulLatency : divLatency;
                     inst.issue = cycle;
                     inst.tag = mulBuffers[i].tag;
-                    System.out.println("========================================");
                     pc++;
                     break;
                 } else {
@@ -488,8 +489,6 @@ public class tomasulo {
                 } else {
                     System.out.println(
                             "there is another instruction loading in this address so the value is dirty and is waiting for the correct value");
-                    System.out.println(cache.getCacheCell(buffer.address));
-                    System.out.println(checkOrderStoreInst(buffer.instruction));
                 }
             }
         }
@@ -534,8 +533,6 @@ public class tomasulo {
                         buffer.Qi = null;
                         if (buffer.Qj == null) {
                             buffer.time = getLatency(buffer.opcode) - 1;
-                            System.out.println("buffer time is " + buffer.time + " for " + inst.type);
-
                         }
                     }
                 }
@@ -770,14 +767,13 @@ public class tomasulo {
             writeBack();
             printTomasuloDetails();
             executed.clear();
-            System.out.println("cache at address 10 is " + cache.getCacheCell(10).value);
+            issued.clear();
 
             // the program will finish when
             try {
                 program.get(pc);
             } catch (Exception e) {
                 if (checkEmptyBuffers()) {
-                    System.out.println("program is finished in cycle " + cycle);
                     break;
                 }
             }

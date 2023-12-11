@@ -6,7 +6,7 @@ public class registerFile {
 
         public register(int number) {
             name = "F" + number;
-            Qi = "0";
+            Qi = "2";
             busy = false;
         }
 
